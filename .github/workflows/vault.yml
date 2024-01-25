@@ -1,0 +1,61 @@
+name: Run Azure Login with OIDC
+
+on:
+  workflow_call:
+    inputs:
+      AZURE_KEYVAULT_NAME:
+        description: 'The name of the Azure Key Vault'
+        type: string
+        required: true
+      AZURE_SECRET_NAME:
+        description: 'The name of the secret in the Azure Key Vault'
+        type: string
+        required: true
+    secrets:
+      AZURE_SUBSCRIPTION_ID:
+        description: 'The Azure subscription ID'
+        required: true
+      AZURE_CLIENT_ID:
+        description: 'The Azure client ID'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'The Azure tenant ID'
+        required: true
+    outputs:
+      vaultsecret:
+        description: 'The secret from the Azure Key Vault'
+        value: ${{ jobs.azure-login-and-get-secret.outputs.vaultsecret }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  azure-login-and-get-secret:
+    runs-on: ubuntu-latest
+
+    outputs:
+      vaultsecret: ${{ steps.getsecret.outputs.SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Azure Login
+        uses: azure/login@cb79c773a3cfa27f31f25eb3f677781210c9ce3d
+        with:
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Get Secret
+        id: getsecret
+        uses: azure/cli@4db43908b9df2e7ac93c8275a8f9a448c59338dd
+        with:
+          inlineScript: |
+            SECRET=$(az keyvault secret show --vault-name ${{ inputs.AZURE_KEYVAULT_NAME }} --name ${{ inputs.AZURE_SECRET_NAME }} --query value)
+
+            echo "SECRET=$SECRET" >> $GITHUB_OUTPUT
+
+            # echo "::add-mask::$SECRET"
+            echo "The secret is: ${SECRET}"
